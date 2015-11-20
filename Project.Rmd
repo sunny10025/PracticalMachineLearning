@@ -1,0 +1,83 @@
+---
+title: "Practical Machine Learning - Prediction Assignment"
+author: "AS"
+date: "November 12, 2015"
+output: html_document
+---
+
+#Synopsis
+Human Activity Recognition : Detecting Correct Weight Lifting Exercise Techniques
+
+Human Activity Recognition - HAR - has emerged as a key research area in the last years and is gaining increasing attention by the pervasive computing research community (see picture below, that illustrates the increasing number of publications in HAR with wearable accelerometers), especially for the development of context-aware systems. There are many potential applications for HAR, like: elderly monitoring, life log systems for monitoring energy expenditure and for supporting weight-loss programs, and digital assistants for weight lifting exercises.
+
+The dataset analyzed here was collected from six young health participants. The participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.
+
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3ryoxAcdj
+
+```{r}
+library(caret)
+library(AppliedPredictiveModeling)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+
+set.seed(3433)
+
+#Load Data
+har_data<-read.csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv', na.strings=c("NA","#DIV/0!","","NaN"))
+
+#Clean Data to take out columns with more than 10% NA's
+har_data_clean<-har_data[,colSums(is.na(har_data))/dim(har_data)[1]<.9]
+
+#Remove Near Zero Values
+nzv <- nearZeroVar(har_data_clean, saveMetrics=TRUE)
+har_data_clean <- har_data_clean[,nzv$nzv==FALSE]
+
+#Remove non-explanatory variables like subject names, X, timestamps etc
+har_data_clean <- har_data_clean[,-which(names(har_data_clean) %in% c('X','user_name','raw_timestamp_part_1','cvtd_timestamp','num_window'))]
+
+#Partition Data
+inTrain <- createDataPartition(har_data_clean$classe, p = 3/4)[[1]]
+training <- har_data_clean[ inTrain,]
+testing <- har_data_clean[-inTrain,]
+#testing <- testing[,-which(names(testing) %in% c('classe'))]
+
+#R Regression Tree 
+fit_rpart <- train(classe~.,method='rpart',data=training)
+
+#Fancy Decision Tree Plot
+fancyRpartPlot(fit_rpart$finalModel)
+
+#Confusion Matrix on Testing set: Regression Tree
+pred_rpart <- predict(fit_rpart, testing)
+confusionMatrix(pred_rpart, testing$classe)
+
+#R Random Forest
+fit_rf <- train(training$classe~.,method='rf',data=training)
+
+#Confusion Matrix on Testing set: Random Forest
+pred_rf <- predict(fit_rf, testing)
+confusionMatrix(pred_rf, testing$classe)
+
+#Generate files for submission
+test_submission<-read.csv('https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv', na.strings=c("NA","#DIV/0!",""))
+test_submission<-test_submission[,which(names(test_submission) %in% names(har_data_clean))]
+pred_submission <- predict(fit_rf, test_submission)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+setwd('D:\\Box\\JohnHopkins\\MachineLearning')
+pml_write_files(pred_submission)
+
+
+```
+
